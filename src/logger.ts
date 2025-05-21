@@ -1,6 +1,6 @@
 import {zeroPad} from './_helpers/zeroPad';
 
-interface ILogItem {
+export interface ILogItem {
     timestamp: number;
     message: string;
 }
