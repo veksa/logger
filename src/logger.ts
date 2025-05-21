@@ -18,14 +18,14 @@ export interface ILogger {
     info: (text: string, ...causes: unknown[]) => void;
     error: (text: string, ...causes: unknown[]) => void;
     warn: (text: string, ...causes: unknown[]) => void;
-    request: (item: IMessage) => void;
-    response: (item: IMessage) => void;
-    event: (item: IMessage) => void;
+    request: (item: IMessage, messageName?: string) => void;
+    response: (item: IMessage, messageName?: string) => void;
+    event: (item: IMessage, messageName?: string) => void;
 }
 
 const defaultExpirationTime = 10 * 60 * 1000; // 10 minutes
 
-export const createLogger = (isEnabled: boolean): ILogger => {
+export const createLogger = (isEnabled: boolean, restrictedPayloads: number[] = []): ILogger => {
     let enabled = isEnabled;
 
     const originalConsoleInfo = console.info;
@@ -172,15 +172,21 @@ export const createLogger = (isEnabled: boolean): ILogger => {
     };
 
     const request = (item: IMessage, messageName?: string) => {
-        server({type: 'Req', name: messageName, payloadType: item.payloadType, color: '#daf9d0', item});
+        if (!restrictedPayloads.includes(item.payloadType)) {
+            server({type: 'Req', name: messageName, payloadType: item.payloadType, color: '#daf9d0', item});
+        }
     };
 
     const response = (item: IMessage, messageName?: string) => {
-        server({type: 'Res', name: messageName, payloadType: item.payloadType, color: '#cceaf4', item});
+        if (!restrictedPayloads.includes(item.payloadType)) {
+            server({type: 'Res', name: messageName, payloadType: item.payloadType, color: '#cceaf4', item});
+        }
     };
 
     const event = (item: IMessage, messageName?: string) => {
-        server({type: 'Evt', name: messageName, payloadType: item.payloadType, color: '#d5d3f3', item});
+        if (!restrictedPayloads.includes(item.payloadType)) {
+            server({type: 'Evt', name: messageName, payloadType: item.payloadType, color: '#d5d3f3', item});
+        }
     };
 
     return {
