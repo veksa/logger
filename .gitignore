@@ -1,6 +1,7 @@
 .idea/
 
 node_modules/
+dist/
 
 .pnp.*
 .yarn/*
