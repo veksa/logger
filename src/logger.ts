@@ -1,6 +1,6 @@
 import {zeroPad} from './_helpers/zeroPad';
 
-export interface ILogItem {
+interface ILogItem {
     timestamp: number;
     message: string;
 }
@@ -11,6 +11,12 @@ interface IMessage<Payload = unknown> {
     clientMsgId: string;
 }
 
+interface IMessageMeta {
+    prefix?: string;
+    prefixColor?: string;
+    messageName?: string;
+}
+
 export interface ILogger {
     enable: () => void;
     disable: () => void;
@@ -18,12 +24,14 @@ export interface ILogger {
     info: (text: string, ...causes: unknown[]) => void;
     error: (text: string, ...causes: unknown[]) => void;
     warn: (text: string, ...causes: unknown[]) => void;
-    request: (item: IMessage, messageName?: string) => void;
-    response: (item: IMessage, messageName?: string) => void;
-    event: (item: IMessage, messageName?: string) => void;
+    request: (item: IMessage, meta?: IMessageMeta) => void;
+    response: (item: IMessage, meta?: IMessageMeta) => void;
+    event: (item: IMessage, meta?: IMessageMeta) => void;
 }
 
 const defaultExpirationTime = 10 * 60 * 1000; // 10 minutes
+
+const messageFontColor = 'rgb(50, 57, 65)';
 
 export const createLogger = (isEnabled: boolean, restrictedPayloads: number[] = []): ILogger => {
     let enabled = isEnabled;
@@ -152,8 +160,8 @@ export const createLogger = (isEnabled: boolean, restrictedPayloads: number[] = 
         }
     };
 
-    const server = (params: { type: string, name?: string, payloadType: number, color: string, item: IMessage }) => {
-        const {type, name, payloadType, color, item} = params;
+    const server = (params: { prefix?: string; prefixColor?: string; type: string, name?: string, payloadType: number, color: string, item: IMessage }) => {
+        const {prefix, prefixColor = '#d2ac7f', type, name, payloadType, color, item} = params;
 
         const {timestamp, format} = getDate();
 
@@ -163,29 +171,59 @@ export const createLogger = (isEnabled: boolean, restrictedPayloads: number[] = 
 
         if (enabled) {
             originalConsoleLog.call(console,
-                `%c ${type}: %c [${name ?? payloadType}]`,
-                `background: #d2ac7f`,
-                `background: ${color}; color: rgb(50, 57, 65)`,
+                `%c ${prefix}: %c ${type} [${name ?? payloadType}]`,
+                `background: ${prefixColor}`,
+                `background: ${color}; color: ${messageFontColor}`,
                 item,
             );
         }
     };
 
-    const request = (item: IMessage, messageName?: string) => {
+    const request = (item: IMessage, meta: IMessageMeta = {}) => {
+        const {prefix, prefixColor, messageName} = meta;
+
         if (!restrictedPayloads.includes(item.payloadType)) {
-            server({type: 'Req', name: messageName, payloadType: item.payloadType, color: '#daf9d0', item});
+            server({
+                prefix,
+                prefixColor,
+                type: 'Req',
+                name: messageName,
+                payloadType: item.payloadType,
+                color: '#daf9d0',
+                item
+            });
         }
     };
 
-    const response = (item: IMessage, messageName?: string) => {
+    const response = (item: IMessage, meta: IMessageMeta = {}) => {
+        const {prefix, prefixColor, messageName} = meta;
+
         if (!restrictedPayloads.includes(item.payloadType)) {
-            server({type: 'Res', name: messageName, payloadType: item.payloadType, color: '#cceaf4', item});
+            server({
+                prefix,
+                prefixColor,
+                type: 'Res',
+                name: messageName,
+                payloadType: item.payloadType,
+                color: '#cceaf4',
+                item
+            });
         }
     };
 
-    const event = (item: IMessage, messageName?: string) => {
+    const event = (item: IMessage, meta: IMessageMeta = {}) => {
+        const {prefix, prefixColor, messageName} = meta;
+
         if (!restrictedPayloads.includes(item.payloadType)) {
-            server({type: 'Evt', name: messageName, payloadType: item.payloadType, color: '#d5d3f3', item});
+            server({
+                prefix,
+                prefixColor,
+                type: 'Evt',
+                name: messageName,
+                payloadType: item.payloadType,
+                color: '#d5d3f3',
+                item
+            });
         }
     };
 
