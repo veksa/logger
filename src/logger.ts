@@ -15,9 +15,9 @@ export interface ILogger {
     enable: () => void;
     disable: () => void;
     getLogs: () => ILogItem[];
-    info: (text: string, cause?: unknown) => void;
-    error: (text: string, cause?: unknown) => void;
-    warn: (text: string, cause?: unknown) => void;
+    info: (text: string, ...causes: unknown[]) => void;
+    error: (text: string, ...causes: unknown[]) => void;
+    warn: (text: string, ...causes: unknown[]) => void;
     request: (item: IMessage) => void;
     response: (item: IMessage) => void;
     event: (item: IMessage) => void;
