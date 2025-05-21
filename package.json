@@ -1,6 +1,6 @@
 {
   "name": "@veksa/logger",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "packageManager": "yarn@4.9.1",
   "main": "./dist/cjs/index.cjs",
   "types": "./dist/index.d.ts",

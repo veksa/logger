@@ -1,1 +1,1 @@
-export {createLogger} from './logger';
+export {createLogger, ILogger} from './logger';
