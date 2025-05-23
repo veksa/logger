@@ -165,17 +165,25 @@ export const createLogger = (isEnabled: boolean, restrictedPayloads: number[] = 
 
         const {timestamp, format} = getDate();
 
-        const msg = `[${format}]: ${type} (${name ?? payloadType}): ${JSON.stringify(item)}`;
+        const msg = `[${format}]: ${prefix} ${type} (${name ?? payloadType}): ${JSON.stringify(item)}`;
 
         pushLog({timestamp, message: msg});
 
         if (enabled) {
-            originalConsoleLog.call(console,
-                `%c ${prefix}: %c ${type} [${name ?? payloadType}]`,
-                `background: ${prefixColor}`,
-                `background: ${color}; color: ${messageFontColor}`,
-                item,
-            );
+            if (prefix) {
+                originalConsoleLog.call(console,
+                    `%c ${prefix} %c ${type} [${name ?? payloadType}]`,
+                    `background: ${prefixColor}`,
+                    `background: ${color}; color: ${messageFontColor}`,
+                    item,
+                );
+            } else {
+                originalConsoleLog.call(console,
+                    `%c ${type} [${name ?? payloadType}]`,
+                    `background: ${color}; color: ${messageFontColor}`,
+                    item,
+                );
+            }
         }
     };
 
