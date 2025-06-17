@@ -1,7 +1,17 @@
 {
   "name": "@veksa/logger",
   "version": "1.0.8",
+  "description": "A stream based implementation of JSON.parse and JSON.stringify for big data",
+  "homepage": "https://github.com/veksa/logger",
   "packageManager": "yarn@4.9.2",
+  "author": {
+    "name": "Aleksandr Khizhnyi",
+    "email": "mendler88@gmail.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:veksa/logger.git"
+  },
   "main": "./dist/cjs/index.cjs",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -12,8 +22,18 @@
       "default": "./dist/cjs/index.cjs"
     }
   },
+  "sideEffects": false,
   "files": [
     "dist"
+  ],
+  "keywords": [
+    "logger",
+    "logging",
+    "typescript",
+    "console",
+    "debug",
+    "browser-logging",
+    "timestamps"
   ],
   "scripts": {
     "clean": "rimraf lib es dist",
