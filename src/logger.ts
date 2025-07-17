@@ -199,7 +199,7 @@ export const createLogger = <Message extends IMessage>(
     const request = (item: IMessage, meta: IMessageMeta = {}) => {
         const {prefix, prefixColor, messageName} = meta;
 
-        if (item.id && !isRestricted?.(item.id)) {
+        if (!item.id || !isRestricted || !isRestricted(item.id)) {
             server({
                 prefix,
                 prefixColor,
@@ -214,7 +214,7 @@ export const createLogger = <Message extends IMessage>(
     const response = (item: IMessage, meta: IMessageMeta = {}) => {
         const {prefix, prefixColor, messageName} = meta;
 
-        if (item.id && !isRestricted?.(item.id)) {
+        if (!item.id || !isRestricted || !isRestricted(item.id)) {
             server({
                 prefix,
                 prefixColor,
@@ -229,7 +229,7 @@ export const createLogger = <Message extends IMessage>(
     const event = (item: IMessage, meta: IMessageMeta = {}) => {
         const {prefix, prefixColor, messageName} = meta;
 
-        if (item.id && !isRestricted?.(item.id)) {
+        if (!item.id || !isRestricted || !isRestricted(item.id)) {
             server({
                 prefix,
                 prefixColor,
