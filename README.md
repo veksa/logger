@@ -4,7 +4,7 @@
 [![npm downloads](https://img.shields.io/npm/dm/@veksa/logger.svg?style=flat-square)](https://www.npmjs.com/package/@veksa/logger)
 [![license](https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square)](LICENSE.md)
 
-Official JavaScript logger library for applications
+Lightweight, configurable logging library for JavaScript applications
 
 ## Installation
 
@@ -23,11 +23,13 @@ yarn add @veksa/logger
 ## Features
 
 - Enhanced console logging with timestamps
-- Memory storage of logs with automatic expiration
+- Memory storage of logs with automatic expiration (10 minutes by default)
 - Special formatting for requests, responses, and events
 - Easy enabling/disabling of logging
-- Support for restricting specific payload types
+- Support for restricting specific message IDs
 - Colorized console output
+- Generic type support for type-safe message handling
+- Utility functions for log management
 
 ## Basic Usage
 
@@ -44,7 +46,7 @@ logger.error('Failed to connect', { code: 500 });
 
 // Network message logging
 logger.request({
-  payloadType: 1,
+  id: 'GET_USER',
   payload: { userId: 123 },
   clientMsgId: 'abc-123'
 }, {
@@ -53,7 +55,7 @@ logger.request({
 });
 
 logger.response({
-  payloadType: 1,
+  id: 'GET_USER',
   payload: { user: { id: 123, name: 'John' } },
   clientMsgId: 'abc-123'
 }, {
@@ -73,14 +75,14 @@ logger.enable();
 
 ## API Reference
 
-### `createLogger(isEnabled, restrictedPayloads?)`
+### `createLogger<Message>(isEnabled, isRestricted?)`
 
 Creates a new logger instance.
 
 - `isEnabled` (boolean): Whether logging is initially enabled
-- `restrictedPayloads` (number[]): Optional array of payload types that should not be logged
+- `isRestricted` (function): Optional function that determines if a message ID should be restricted from logging
 
-Returns an `ILogger` object with the following methods:
+Returns an `ILogger<Message>` object with the following methods:
 
 ### Methods
 
@@ -103,7 +105,7 @@ interface ILogItem {
 }
 
 interface IMessage<Payload = unknown> {
-    payloadType: number;
+    id?: string | number;
     payload: Payload;
     clientMsgId: string;
 }
@@ -114,17 +116,35 @@ interface IMessageMeta {
     messageName?: string;
 }
 
-interface ILogger {
+interface ILogger<Message extends IMessage> {
     enable: () => void;
     disable: () => void;
     getLogs: () => ILogItem[];
     info: (text: string, ...causes: unknown[]) => void;
     error: (text: string, ...causes: unknown[]) => void;
     warn: (text: string, ...causes: unknown[]) => void;
-    request: (item: IMessage, meta?: IMessageMeta) => void;
-    response: (item: IMessage, meta?: IMessageMeta) => void;
-    event: (item: IMessage, meta?: IMessageMeta) => void;
+    request: (item: Message, meta?: IMessageMeta) => void;
+    response: (item: Message, meta?: IMessageMeta) => void;
+    event: (item: Message, meta?: IMessageMeta) => void;
 }
+```
+
+### Helper Functions
+
+#### `mergeLogs(limit)`
+
+Merges multiple log arrays into a single array, sorted by timestamp.
+
+- `limit` (number): Maximum number of log messages to return
+
+```typescript
+import { createLogger, mergeLogs } from '@veksa/logger';
+
+const logger1 = createLogger(true);
+const logger2 = createLogger(true);
+
+// Get combined logs from both loggers, limited to 100 entries
+const combinedLogs = mergeLogs(100)(logger1.getLogs(), logger2.getLogs());
 ```
 
 ## Contributing

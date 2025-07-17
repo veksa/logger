@@ -6,7 +6,7 @@ export interface ILogItem {
 }
 
 interface IMessage<Payload = unknown> {
-    payloadType: number;
+    id?: string | number;
     payload: Payload;
     clientMsgId: string;
 }
@@ -17,23 +17,25 @@ interface IMessageMeta {
     messageName?: string;
 }
 
-export interface ILogger {
+export interface ILogger<Message extends IMessage> {
     enable: () => void;
     disable: () => void;
     getLogs: () => ILogItem[];
     info: (text: string, ...causes: unknown[]) => void;
     error: (text: string, ...causes: unknown[]) => void;
     warn: (text: string, ...causes: unknown[]) => void;
-    request: (item: IMessage, meta?: IMessageMeta) => void;
-    response: (item: IMessage, meta?: IMessageMeta) => void;
-    event: (item: IMessage, meta?: IMessageMeta) => void;
+    request: (item: Message, meta?: IMessageMeta) => void;
+    response: (item: Message, meta?: IMessageMeta) => void;
+    event: (item: Message, meta?: IMessageMeta) => void;
 }
 
 const defaultExpirationTime = 10 * 60 * 1000; // 10 minutes
 
 const messageFontColor = 'rgb(50, 57, 65)';
 
-export const createLogger = (isEnabled: boolean, restrictedPayloads: number[] = []): ILogger => {
+export const createLogger = <Message extends IMessage>(
+    isEnabled: boolean, isRestricted?: (id: string | number) => boolean,
+): ILogger<Message> => {
     let enabled = isEnabled;
 
     const originalConsoleInfo = console.info;
@@ -160,26 +162,33 @@ export const createLogger = (isEnabled: boolean, restrictedPayloads: number[] = 
         }
     };
 
-    const server = (params: { prefix?: string; prefixColor?: string; type: string, name?: string, payloadType: number, color: string, item: IMessage }) => {
-        const {prefix, prefixColor = '#d2ac7f', type, name, payloadType, color, item} = params;
+    const server = (params: {
+        prefix?: string;
+        prefixColor?: string;
+        type: string,
+        name?: string | number,
+        color: string,
+        item: IMessage
+    }) => {
+        const {prefix, prefixColor = '#d2ac7f', type, name, color, item} = params;
 
         const {timestamp, format} = getDate();
 
-        const msg = `[${format}]: ${prefix} ${type} (${name ?? payloadType}): ${JSON.stringify(item)}`;
+        const msg = `[${format}]: ${prefix} ${type} (${name ?? 'unknown'}): ${JSON.stringify(item)}`;
 
         pushLog({timestamp, message: msg});
 
         if (enabled) {
             if (prefix) {
                 originalConsoleLog.call(console,
-                    `%c ${prefix} %c ${type} [${name ?? payloadType}]`,
+                    `%c ${prefix} %c ${type} [${name ?? 'unknown'}]`,
                     `background: ${prefixColor}`,
                     `background: ${color}; color: ${messageFontColor}`,
                     item,
                 );
             } else {
                 originalConsoleLog.call(console,
-                    `%c ${type} [${name ?? payloadType}]`,
+                    `%c ${type} [${name ?? 'unknown'}]`,
                     `background: ${color}; color: ${messageFontColor}`,
                     item,
                 );
@@ -190,15 +199,14 @@ export const createLogger = (isEnabled: boolean, restrictedPayloads: number[] = 
     const request = (item: IMessage, meta: IMessageMeta = {}) => {
         const {prefix, prefixColor, messageName} = meta;
 
-        if (!restrictedPayloads.includes(item.payloadType)) {
+        if (item.id && !isRestricted?.(item.id)) {
             server({
                 prefix,
                 prefixColor,
                 type: 'Req',
-                name: messageName,
-                payloadType: item.payloadType,
+                name: messageName ?? item.id,
                 color: '#daf9d0',
-                item
+                item,
             });
         }
     };
@@ -206,15 +214,14 @@ export const createLogger = (isEnabled: boolean, restrictedPayloads: number[] = 
     const response = (item: IMessage, meta: IMessageMeta = {}) => {
         const {prefix, prefixColor, messageName} = meta;
 
-        if (!restrictedPayloads.includes(item.payloadType)) {
+        if (item.id && !isRestricted?.(item.id)) {
             server({
                 prefix,
                 prefixColor,
                 type: 'Res',
-                name: messageName,
-                payloadType: item.payloadType,
+                name: messageName ?? item.id,
                 color: '#cceaf4',
-                item
+                item,
             });
         }
     };
@@ -222,15 +229,14 @@ export const createLogger = (isEnabled: boolean, restrictedPayloads: number[] = 
     const event = (item: IMessage, meta: IMessageMeta = {}) => {
         const {prefix, prefixColor, messageName} = meta;
 
-        if (!restrictedPayloads.includes(item.payloadType)) {
+        if (item.id && !isRestricted?.(item.id)) {
             server({
                 prefix,
                 prefixColor,
                 type: 'Evt',
-                name: messageName,
-                payloadType: item.payloadType,
+                name: messageName ?? item.id,
                 color: '#d5d3f3',
-                item
+                item,
             });
         }
     };

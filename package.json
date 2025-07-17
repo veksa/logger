@@ -1,6 +1,6 @@
 {
   "name": "@veksa/logger",
-  "version": "1.0.8",
+  "version": "1.0.10",
   "description": "Lightweight, configurable logging library for JavaScript applications",
   "homepage": "https://github.com/veksa/logger",
   "packageManager": "yarn@4.9.2",
@@ -38,7 +38,8 @@
   "scripts": {
     "clean": "rimraf lib es dist",
     "build": "yarn clean && tsup",
-    "compile": "tsc --noEmit"
+    "compile": "tsc --noEmit",
+    "prepublish": "yarn build"
   },
   "devDependencies": {
     "@types/node": "^24.0.3",
