@@ -5,13 +5,13 @@ export interface ILogItem {
     message: string;
 }
 
-interface IMessage<Payload = unknown> {
+export interface IMessage<Payload = unknown> {
     id?: string | number;
     payload: Payload;
     clientMsgId: string;
 }
 
-interface IMessageMeta {
+export interface IMessageMeta {
     prefix?: string;
     prefixColor?: string;
     messageName?: string;

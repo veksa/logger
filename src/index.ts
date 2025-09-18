@@ -1,2 +1,2 @@
-export {createLogger, ILogger, ILogItem} from './logger';
+export {createLogger, ILogger, ILogItem, IMessage, IMessageMeta} from './logger';
 export {mergeLogs} from './_helpers/mergeLogs';
