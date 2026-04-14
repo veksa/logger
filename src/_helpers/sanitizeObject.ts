@@ -1,5 +1,5 @@
 export const sanitizeObject = (obj: unknown): unknown => {
-    if (Buffer.isBuffer(obj) || obj instanceof Uint8Array) {
+    if ((typeof Buffer !== 'undefined' && Buffer.isBuffer(obj)) || obj instanceof Uint8Array) {
         return `<Buffer: ${(obj as Buffer | Uint8Array).length} bytes>`;
     }
 
