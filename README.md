@@ -30,6 +30,7 @@ yarn add @veksa/logger
 - Colorized console output
 - Generic type support for type-safe message handling
 - Utility functions for log management
+- Automatic sanitization of binary data (Buffer, Uint8Array) to prevent performance issues with large payloads
 
 ## Basic Usage
 
@@ -146,6 +147,26 @@ const logger2 = createLogger(true);
 // Get combined logs from both loggers, limited to 100 entries
 const combinedLogs = mergeLogs(100)(logger1.getLogs(), logger2.getLogs());
 ```
+
+#### `sanitizeObject(obj)`
+
+Recursively sanitizes an object by replacing binary data (Buffer, Uint8Array) with string representations to prevent performance issues when logging large payloads.
+
+- `obj` (unknown): The object to sanitize
+
+```typescript
+import { sanitizeObject } from '@veksa/logger';
+
+const data = {
+  image: Buffer.from('large binary data'),
+  metadata: { size: 1024 }
+};
+
+const sanitized = sanitizeObject(data);
+// Result: { image: '<Buffer: 17 bytes>', metadata: { size: 1024 } }
+```
+
+This function is automatically used internally by the logger when serializing objects for log messages, ensuring that large binary data doesn't cause performance issues or memory bloat.
 
 ## Contributing
 

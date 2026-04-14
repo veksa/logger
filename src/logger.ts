@@ -1,4 +1,5 @@
 import {zeroPad} from './_helpers/zeroPad';
+import {sanitizeObject} from './_helpers/sanitizeObject';
 
 export interface ILogItem {
     timestamp: number;
@@ -133,7 +134,7 @@ export const createLogger = <Message extends IMessage>(
 
         const msg = `[${format}] ${text}`;
         const formatParams = cause
-            ? `, cause: ${JSON.stringify(cause)}`
+            ? `, cause: ${JSON.stringify(sanitizeObject(cause))}`
             : '';
 
         pushLog({timestamp, message: msg + formatParams});
@@ -150,7 +151,7 @@ export const createLogger = <Message extends IMessage>(
 
         const msg = `[${format}] ${text}`;
         const formatParams = cause
-            ? `, cause: ${JSON.stringify(cause)}`
+            ? `, cause: ${JSON.stringify(sanitizeObject(cause))}`
             : '';
 
         pushLog({timestamp, message: msg + formatParams});
@@ -174,7 +175,7 @@ export const createLogger = <Message extends IMessage>(
 
         const {timestamp, format} = getDate();
 
-        const msg = `[${format}]: ${prefix} ${type} (${name ?? 'unknown'}): ${JSON.stringify(item)}`;
+        const msg = `[${format}]: ${prefix} ${type} (${name ?? 'unknown'}): ${JSON.stringify(sanitizeObject(item))}`;
 
         pushLog({timestamp, message: msg});
 
