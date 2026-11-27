@@ -40,7 +40,8 @@
     "build": "yarn clean && tsup",
     "compile": "tsc --noEmit",
     "test": "jest",
-    "prepublish": "yarn build"
+    "check-all": "yarn compile && yarn test && yarn build",
+    "prepublishOnly": "yarn build"
   },
   "devDependencies": {
     "@types/jest": "^30.0.0",
