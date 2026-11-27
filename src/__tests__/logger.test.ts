@@ -221,3 +221,76 @@ describe('createLogger redaction', () => {
     });
 });
 
+describe('createLogger storage and console capture', () => {
+    it('should keep logs for expirationTime', () => {
+        jest.useFakeTimers({now: 0});
+        const logger = createLogger(true, {expirationTime: 1000});
+
+        logger.info('old');
+        jest.setSystemTime(1001);
+
+        expect(logger.getLogs()).toHaveLength(0);
+    });
+
+    it('should keep logs forever with an infinite expirationTime', () => {
+        jest.useFakeTimers({now: 0});
+        const logger = createLogger(true, {expirationTime: Infinity});
+
+        logger.info('old');
+        jest.setSystemTime(24 * 60 * 60 * 1000);
+
+        expect(logger.getLogs()).toHaveLength(1);
+    });
+
+    it('should keep at most maxItems, dropping the oldest', () => {
+        const logger = createLogger(true, {maxItems: 2});
+
+        logger.info('1');
+        logger.info('2');
+        logger.info('3');
+
+        expect(messages(logger)).toEqual(['[t] 2', '[t] 3']);
+    });
+
+    it('should leave the console alone when captureConsole is false', () => {
+        const logger = createLogger(true, {captureConsole: false});
+
+        expect(console.log).toBe(mocks.log);
+        console.log('not stored');
+
+        expect(logger.getLogs()).toHaveLength(0);
+    });
+
+    it('should restore the console on dispose', () => {
+        const logger = createLogger(true);
+        expect(console.log).not.toBe(mocks.log);
+
+        logger.dispose();
+
+        expect(console.log).toBe(mocks.log);
+        expect(console.warn).toBe(mocks.warn);
+        expect(console.error).toBe(mocks.error);
+        console.log('after');
+        expect(logger.getLogs()).toHaveLength(0);
+    });
+
+    it('should stop capturing on dispose even when another logger patched the console after it', () => {
+        const first = createLogger(true);
+        const second = createLogger(true);
+
+        first.dispose();
+        console.log('only second');
+
+        expect(first.getLogs()).toHaveLength(0);
+        expect(second.getLogs()).toHaveLength(1);
+        expect(mocks.log).toHaveBeenCalledTimes(1);
+
+        second.dispose();
+        console.log('none');
+
+        expect(first.getLogs()).toHaveLength(0);
+        expect(second.getLogs()).toHaveLength(1);
+        expect(mocks.log).toHaveBeenLastCalledWith('none');
+    });
+});
+

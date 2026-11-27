@@ -30,6 +30,12 @@ export interface ILoggerOptions {
     isRestricted?: (id: string | number) => boolean;
     /** Keys and paths replaced before a value is stored or printed. */
     redact?: ILoggerRedactOptions;
+    /** How long a log is kept, in ms; 10 minutes by default, `Infinity` keeps logs until `maxItems` pushes them out. */
+    expirationTime?: number;
+    /** The most logs kept; the oldest go first. No limit by default. */
+    maxItems?: number;
+    /** Store what the app passes to `console.log`, `console.warn` and `console.error`; `true` by default. */
+    captureConsole?: boolean;
 }
 
 export interface ILogger<Message extends IMessage> {
@@ -42,6 +48,8 @@ export interface ILogger<Message extends IMessage> {
     request: (item: Message, meta?: IMessageMeta) => void;
     response: (item: Message, meta?: IMessageMeta) => void;
     event: (item: Message, meta?: IMessageMeta) => void;
+    /** Stops capturing the console and puts back the console methods this logger replaced. */
+    dispose: () => void;
 }
 
 const defaultExpirationTime = 10 * 60 * 1000; // 10 minutes
@@ -67,7 +75,13 @@ const formatCauses = (causes: unknown[], sanitize: Sanitize): string => {
 export const createLogger = <Message extends IMessage>(
     isEnabled: boolean, options?: ILoggerOptions | ((id: string | number) => boolean),
 ): ILogger<Message> => {
-    const {isRestricted, redact}: ILoggerOptions = typeof options === 'function'
+    const {
+        isRestricted,
+        redact,
+        expirationTime = defaultExpirationTime,
+        maxItems = Infinity,
+        captureConsole = true,
+    }: ILoggerOptions = typeof options === 'function'
         ? {isRestricted: options}
         : options ?? {};
 
@@ -87,12 +101,28 @@ export const createLogger = <Message extends IMessage>(
     const originalConsoleError = console.error;
     const originalConsoleWarn = console.warn;
 
-    let logs: ILogItem[] = [];
+    const logs: ILogItem[] = [];
+
+    // logs are kept in the order they were written, so the expired and the extra ones are at the start
+    const prune = () => {
+        const oldest = Date.now() - expirationTime;
+
+        let expired = 0;
+        while (expired < logs.length && logs[expired].timestamp < oldest) {
+            expired++;
+        }
+
+        const extra = Math.max(logs.length - expired - maxItems, 0);
+
+        if (expired + extra > 0) {
+            logs.splice(0, expired + extra);
+        }
+    };
 
     const pushLog = (log: ILogItem) => {
         logs.push(log);
 
-        logs = logs.filter(item => item.timestamp >= new Date().getTime() - defaultExpirationTime);
+        prune();
     };
 
     const getDate = () => {
@@ -104,8 +134,15 @@ export const createLogger = <Message extends IMessage>(
         };
     };
 
+    let capturing = captureConsole;
+
     const capture = (level: string, original: (...args: unknown[]) => void) => {
         return (text?: unknown, ...causes: unknown[]) => {
+            if (!capturing) {
+                original.call(console, text, ...causes);
+                return;
+            }
+
             const {timestamp, format} = getDate();
 
             pushLog({
@@ -117,9 +154,36 @@ export const createLogger = <Message extends IMessage>(
         };
     };
 
-    console.log = capture('LOG', originalConsoleLog);
-    console.error = capture('ERROR', originalConsoleError);
-    console.warn = capture('WARN', originalConsoleWarn);
+    const patches = captureConsole
+        ? {
+            log: capture('LOG', originalConsoleLog),
+            error: capture('ERROR', originalConsoleError),
+            warn: capture('WARN', originalConsoleWarn),
+        }
+        : undefined;
+
+    if (patches) {
+        console.log = patches.log;
+        console.error = patches.error;
+        console.warn = patches.warn;
+    }
+
+    const dispose = () => {
+        capturing = false;
+
+        // a method patched again after us stays; our patch inside it now only passes calls through
+        if (patches) {
+            if (console.log === patches.log) {
+                console.log = originalConsoleLog;
+            }
+            if (console.error === patches.error) {
+                console.error = originalConsoleError;
+            }
+            if (console.warn === patches.warn) {
+                console.warn = originalConsoleWarn;
+            }
+        }
+    };
 
     const enable = () => {
         enabled = true;
@@ -130,6 +194,8 @@ export const createLogger = <Message extends IMessage>(
     };
 
     const getLogs = () => {
+        prune();
+
         return logs.slice();
     };
 
@@ -204,5 +270,6 @@ export const createLogger = <Message extends IMessage>(
         request: server('Req', '#daf9d0'),
         response: server('Res', '#cceaf4'),
         event: server('Evt', '#d5d3f3'),
+        dispose,
     };
 };
