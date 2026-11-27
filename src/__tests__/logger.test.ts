@@ -294,3 +294,14 @@ describe('createLogger storage and console capture', () => {
     });
 });
 
+describe('createLogger timestamps', () => {
+    it('should write the local date and time with milliseconds', () => {
+        jest.useFakeTimers({now: new Date(2026, 0, 2, 3, 4, 5, 6)});
+        const logger = createLogger(true);
+
+        logger.info('at');
+
+        expect(logger.getLogs()[0].message).toBe('[02.01.2026 03:04:05.006] at');
+    });
+});
+

@@ -130,7 +130,7 @@ export const createLogger = <Message extends IMessage>(
 
         return {
             timestamp: date.getTime(),
-            format: `${zeroPad(date.getDate())}.${zeroPad(date.getMonth() + 1)}.${date.getFullYear()} ${zeroPad(date.getHours())}:${zeroPad(date.getMinutes())}:${zeroPad(date.getSeconds())}`,
+            format: `${zeroPad(date.getDate())}.${zeroPad(date.getMonth() + 1)}.${date.getFullYear()} ${zeroPad(date.getHours())}:${zeroPad(date.getMinutes())}:${zeroPad(date.getSeconds())}.${zeroPad(date.getMilliseconds(), 3)}`,
         };
     };
 
