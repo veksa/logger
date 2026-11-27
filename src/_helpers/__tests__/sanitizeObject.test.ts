@@ -1,4 +1,4 @@
-import {sanitizeObject, stringify} from '../sanitizeObject';
+import {DEFAULT_SENSITIVE_KEYS, sanitizeObject, stringify} from '../sanitizeObject';
 
 describe('sanitizeObject', () => {
     it('should replace Uint8Array with string representation', () => {
@@ -171,3 +171,137 @@ describe('stringify', () => {
         expect(stringify(undefined)).toBe('undefined');
     });
 });
+
+describe('sanitizeObject redaction', () => {
+    const credentials = {
+        id: 'LOGIN',
+        payload: {user: 'user@example.test', Password: 'hunter2', nested: [{token: 't-1', keep: 1}]},
+    };
+
+    it('should redact keys at any depth, ignoring case', () => {
+        expect(sanitizeObject(credentials, {redact: {keys: ['password', 'token']}})).toEqual({
+            id: 'LOGIN',
+            payload: {user: 'user@example.test', Password: '[REDACTED]', nested: [{token: '[REDACTED]', keep: 1}]},
+        });
+    });
+
+    it('should redact keys matching a RegExp, also a global one', () => {
+        const pattern = /pass/gi;
+        const result = sanitizeObject({password: 'a', passcode: 'b', other: 'c'}, {redact: {keys: [pattern]}});
+        expect(result).toEqual({password: '[REDACTED]', passcode: '[REDACTED]', other: 'c'});
+    });
+
+    it('should redact exact paths only', () => {
+        const input = {payload: {secret: 's', inner: {secret: 'kept'}}, secret: 'kept'};
+        expect(sanitizeObject(input, {redact: {paths: ['payload.secret']}})).toEqual({
+            payload: {secret: '[REDACTED]', inner: {secret: 'kept'}},
+            secret: 'kept',
+        });
+    });
+
+    it('should match array indices and wildcards in paths', () => {
+        const input = {items: [{code: 1}, {code: 2}]};
+        expect(sanitizeObject(input, {redact: {paths: ['items.*.code']}})).toEqual({
+            items: [{code: '[REDACTED]'}, {code: '[REDACTED]'}],
+        });
+        expect(sanitizeObject(input, {redact: {paths: ['items.1']}})).toEqual({
+            items: [{code: 1}, '[REDACTED]'],
+        });
+    });
+
+    it('should redact a whole object or binary value, not walk into it', () => {
+        expect(sanitizeObject({auth: {a: 1}, key: new Uint8Array(4)}, {redact: {keys: ['auth', 'key']}})).toEqual({
+            auth: '[REDACTED]',
+            key: '[REDACTED]',
+        });
+    });
+
+    it('should use a custom censor and fall back when it throws', () => {
+        const censor = (value: unknown, key: string, path: string) => `${key}@${path}:${String(value).length}`;
+        expect(sanitizeObject({a: {pin: '1234'}}, {redact: {keys: ['pin'], censor}})).toEqual({a: {pin: 'pin@a.pin:4'}});
+        expect(sanitizeObject({pin: 1}, {redact: {keys: ['pin'], censor: () => {
+            throw new Error('bad');
+        }}})).toEqual({pin: '[REDACTED]'});
+        expect(sanitizeObject({pin: 1}, {redact: {keys: ['pin'], censor: '***'}})).toEqual({pin: '***'});
+    });
+
+    it('should redact in maps, error fields and error causes', () => {
+        const error = Object.assign(new Error('failed'), {password: 'p'});
+        Object.defineProperty(error, 'cause', {value: {token: 't'}, enumerable: false});
+        const result = sanitizeObject({map: new Map([['password', 'p']]), error}, {redact: {keys: ['password', 'token']}});
+        expect(result).toMatchObject({
+            map: {password: '[REDACTED]'},
+            error: {message: 'failed', password: '[REDACTED]', cause: {token: '[REDACTED]'}},
+        });
+    });
+
+    it('should not touch the input', () => {
+        const input = {password: 'p'};
+        sanitizeObject(input, {redact: {keys: ['password']}});
+        expect(input).toEqual({password: 'p'});
+    });
+
+    it('should cover common credential names with DEFAULT_SENSITIVE_KEYS', () => {
+        const result = sanitizeObject({password: 1, accessToken: 2, apiKey: 3, name: 4}, {
+            redact: {keys: [...DEFAULT_SENSITIVE_KEYS]},
+        });
+        expect(result).toEqual({password: '[REDACTED]', accessToken: '[REDACTED]', apiKey: '[REDACTED]', name: 4});
+    });
+});
+
+describe('sanitizeObject preserve', () => {
+    const redact = {keys: ['password']};
+
+    it('should return the same reference when nothing is redacted', () => {
+        const input = {user: 'u', data: new Uint8Array(2), at: new Date(0)};
+        expect(sanitizeObject(input, {redact, preserve: true})).toBe(input);
+        expect(sanitizeObject(input, {preserve: true})).toBe(input);
+    });
+
+    it('should copy only the branch with a redacted value and keep the rest by reference', () => {
+        const data = new Uint8Array(2);
+        const untouched = {a: 1};
+        const input = {payload: {password: 'p', data}, untouched, list: [{password: 'q'}, untouched]};
+
+        const result = sanitizeObject(input, {redact, preserve: true}) as typeof input;
+
+        expect(result).not.toBe(input);
+        expect(result.payload).toEqual({password: '[REDACTED]', data});
+        expect(result.payload.data).toBe(data);
+        expect(result.untouched).toBe(untouched);
+        expect(result.list[0]).toEqual({password: '[REDACTED]'});
+        expect(result.list[1]).toBe(untouched);
+        expect(input.payload.password).toBe('p');
+    });
+
+    it('should keep the prototype and non-enumerable fields of a copied error', () => {
+        const error = Object.assign(new TypeError('failed'), {password: 'p'});
+        const result = sanitizeObject(error, {redact, preserve: true}) as TypeError & {password: string};
+
+        expect(result).toBeInstanceOf(TypeError);
+        expect(result.message).toBe('failed');
+        expect(result.stack).toBe(error.stack);
+        expect(result.password).toBe('[REDACTED]');
+        expect(error.password).toBe('p');
+    });
+
+    it('should redact in maps and sets', () => {
+        const result = sanitizeObject({
+            map: new Map([['password', 'p'], ['user', 'u']]),
+            set: new Set([{password: 'p'}]),
+        }, {redact, preserve: true}) as {map: Map<string, string>; set: Set<unknown>};
+
+        expect(result.map.get('password')).toBe('[REDACTED]');
+        expect(result.map.get('user')).toBe('u');
+        expect(Array.from(result.set)).toEqual([{password: '[REDACTED]'}]);
+    });
+
+    it('should survive circular references', () => {
+        const input: Record<string, unknown> = {password: 'p'};
+        input.self = input;
+        const result = sanitizeObject(input, {redact, preserve: true}) as Record<string, unknown>;
+        expect(result.password).toBe('[REDACTED]');
+        expect(result.self).toBe(input);
+    });
+});
+

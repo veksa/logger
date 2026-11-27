@@ -144,3 +144,80 @@ describe('createLogger', () => {
         expect(logger.getLogs()).toHaveLength(1);
     });
 });
+
+describe('createLogger redaction', () => {
+    const auth: IMessage<{user: string; password: string}> = {
+        id: 'LOGIN',
+        payload: {user: 'user@example.test', password: 'hunter2'},
+        clientMsgId: 'c-1',
+    };
+
+    it('should keep the isRestricted function working as the second argument', () => {
+        const logger = createLogger(true, id => id === 'LOGIN');
+        logger.request(auth);
+        expect(logger.getLogs()).toHaveLength(0);
+    });
+
+    it('should take isRestricted from options', () => {
+        const logger = createLogger(true, {isRestricted: id => id === 'LOGIN'});
+        logger.request(auth);
+        expect(logger.getLogs()).toHaveLength(0);
+    });
+
+    it('should never store or print a redacted key', () => {
+        const logger = createLogger(true, {redact: {keys: ['password']}});
+
+        logger.request(auth);
+        logger.response(auth);
+        logger.event(auth);
+        logger.error('failed', auth.payload);
+        logger.warn('slow', auth);
+        logger.info('state', auth);
+        console.log('raw', auth);
+
+        const stored = logger.getLogs().map(log => log.message).join('\n');
+        expect(stored).not.toContain('hunter2');
+        expect(stored).toContain('[REDACTED]');
+
+        const printed = JSON.stringify([mocks.log.mock.calls, mocks.info.mock.calls, mocks.warn.mock.calls, mocks.error.mock.calls]);
+        expect(printed).not.toContain('hunter2');
+
+        expect(auth.payload.password).toBe('hunter2');
+    });
+
+    it('should print the original object when console redaction is off', () => {
+        const logger = createLogger(true, {redact: {keys: ['password'], console: false}});
+
+        logger.request(auth);
+
+        expect(logger.getLogs()[0].message).not.toContain('hunter2');
+        expect(mocks.log.mock.calls[0][2]).toBe(auth);
+    });
+
+    it('should print the very same object when nothing is redacted', () => {
+        const logger = createLogger(true, {redact: {keys: ['password']}});
+        logger.request(login);
+        expect(mocks.log.mock.calls[0][2]).toBe(login);
+    });
+
+    it('should add per-message redaction from meta to the logger rules', () => {
+        const logger = createLogger(true, {redact: {keys: ['user']}});
+
+        logger.request(auth, {redact: {paths: ['payload.password']}});
+        logger.response(auth);
+
+        const [first, second] = logger.getLogs().map(log => log.message);
+        expect(first).toContain('"user":"[REDACTED]","password":"[REDACTED]"');
+        expect(second).toContain('"password":"hunter2"');
+        expect(JSON.stringify(mocks.log.mock.calls[0])).not.toContain('hunter2');
+    });
+
+    it('should redact per message without logger rules', () => {
+        const logger = createLogger(true);
+
+        logger.request(auth, {redact: {keys: ['password'], censor: '***'}});
+
+        expect(logger.getLogs()[0].message).toContain('"password":"***"');
+    });
+});
+
