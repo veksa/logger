@@ -34,6 +34,16 @@ const defaultExpirationTime = 10 * 60 * 1000; // 10 minutes
 
 const messageFontColor = 'rgb(50, 57, 65)';
 
+const formatValue = (value: unknown): string => {
+    return typeof value === 'string' ? value : stringify(value);
+};
+
+const formatCauses = (causes: unknown[]): string => {
+    return causes.length > 0
+        ? `, cause: ${causes.map(formatValue).join(' ')}`
+        : '';
+};
+
 export const createLogger = <Message extends IMessage>(
     isEnabled: boolean, isRestricted?: (id: string | number) => boolean,
 ): ILogger<Message> => {
@@ -52,44 +62,28 @@ export const createLogger = <Message extends IMessage>(
         logs = logs.filter(item => item.timestamp >= new Date().getTime() - defaultExpirationTime);
     };
 
-    console.log = (text: string, ...causes: unknown[]) => {
-        const {timestamp, format} = getDate();
+    const getDate = () => {
+        const date = new Date();
 
-        const msg = `[${format}] LOG: ${text}`;
-        const formatParams = causes
-            ? `, cause: ${causes.join(' ')}`
-            : '';
-
-        pushLog({timestamp, message: msg + formatParams});
-
-        originalConsoleLog.call(console, text, ...causes);
+        return {
+            timestamp: date.getTime(),
+            format: `${zeroPad(date.getDate())}.${zeroPad(date.getMonth() + 1)}.${date.getFullYear()} ${zeroPad(date.getHours())}:${zeroPad(date.getMinutes())}:${zeroPad(date.getSeconds())}`,
+        };
     };
 
-    console.error = (text: string, ...causes: unknown[]) => {
-        const {timestamp, format} = getDate();
+    const capture = (level: string, original: (...args: unknown[]) => void) => {
+        return (text?: unknown, ...causes: unknown[]) => {
+            const {timestamp, format} = getDate();
 
-        const msg = `[${format}] ERROR: ${text}`;
-        const formatParams = causes
-            ? `, cause: ${causes.join(' ')}`
-            : '';
+            pushLog({timestamp, message: `[${format}] ${level}: ${formatValue(text)}${formatCauses(causes)}`});
 
-        pushLog({timestamp, message: msg + formatParams});
-
-        originalConsoleError.call(console, text, ...causes);
+            original.call(console, text, ...causes);
+        };
     };
 
-    console.warn = (text: string, ...causes: unknown[]) => {
-        const {timestamp, format} = getDate();
-
-        const msg = `[${format}] WARN: ${text}`;
-        const formatParams = causes
-            ? `, cause: ${causes.join(' ')}`
-            : '';
-
-        pushLog({timestamp, message: msg + formatParams});
-
-        originalConsoleWarn.call(console, text, ...causes);
-    };
+    console.log = capture('LOG', originalConsoleLog);
+    console.error = capture('ERROR', originalConsoleError);
+    console.warn = capture('WARN', originalConsoleWarn);
 
     const enable = () => {
         enabled = true;
@@ -100,146 +94,61 @@ export const createLogger = <Message extends IMessage>(
     };
 
     const getLogs = () => {
-        return logs;
+        return logs.slice();
     };
 
-    const getDate = () => {
-        const date = new Date();
+    const write = (original: (...args: unknown[]) => void) => {
+        return (text: string, ...args: unknown[]) => {
+            const causes = args.filter(cause => cause !== undefined);
+            const {timestamp, format} = getDate();
 
-        return {
-            timestamp: date.getTime(),
-            format: `${zeroPad(date.getDate())}.${zeroPad(date.getMonth() + 1)}.${date.getFullYear()} ${zeroPad(date.getHours())}:${zeroPad(date.getMinutes())}:${zeroPad(date.getSeconds())}`,
+            pushLog({timestamp, message: `[${format}] ${text}${formatCauses(causes)}`});
+
+            if (enabled) {
+                original.call(console, text, ...causes);
+            }
         };
     };
 
-    const info = (text: string, cause?: unknown) => {
-        const {timestamp, format} = getDate();
+    const info = write(originalConsoleInfo);
+    const error = write(originalConsoleError);
+    const warn = write(originalConsoleWarn);
 
-        const msg = `[${format}] ${text}`;
-        const formatParams = cause
-            ? `, cause: ${cause}`
-            : '';
+    const server = (type: string, color: string) => {
+        return (item: Message, meta: IMessageMeta = {}) => {
+            const {prefix, prefixColor = '#d2ac7f', messageName} = meta;
 
-        pushLog({timestamp, message: msg + formatParams});
+            const hasId = item.id !== undefined && item.id !== null;
 
-        if (enabled) {
-            originalConsoleInfo.call(console,
-                ...[text, cause].filter(item => item !== undefined),
-            );
-        }
-    };
-
-    const error = (text: string, cause?: unknown) => {
-        const {timestamp, format} = getDate();
-
-        const msg = `[${format}] ${text}`;
-        const formatParams = cause
-            ? `, cause: ${stringify(cause)}`
-            : '';
-
-        pushLog({timestamp, message: msg + formatParams});
-
-        if (enabled) {
-            originalConsoleError.call(console,
-                ...[text, cause].filter(item => item !== undefined),
-            );
-        }
-    };
-
-    const warn = (text: string, cause?: unknown) => {
-        const {timestamp, format} = getDate();
-
-        const msg = `[${format}] ${text}`;
-        const formatParams = cause
-            ? `, cause: ${stringify(cause)}`
-            : '';
-
-        pushLog({timestamp, message: msg + formatParams});
-
-        if (enabled) {
-            originalConsoleWarn.call(console,
-                ...[text, cause].filter(item => item !== undefined),
-            );
-        }
-    };
-
-    const server = (params: {
-        prefix?: string;
-        prefixColor?: string;
-        type: string,
-        name?: string | number,
-        color: string,
-        item: IMessage
-    }) => {
-        const {prefix, prefixColor = '#d2ac7f', type, name, color, item} = params;
-
-        const {timestamp, format} = getDate();
-
-        const msg = `[${format}]: ${prefix} ${type} (${name ?? 'unknown'}): ${stringify(item)}`;
-
-        pushLog({timestamp, message: msg});
-
-        if (enabled) {
-            if (prefix) {
-                originalConsoleLog.call(console,
-                    `%c ${prefix} %c ${type} [${name ?? 'unknown'}]`,
-                    `background: ${prefixColor}`,
-                    `background: ${color}; color: ${messageFontColor}`,
-                    item,
-                );
-            } else {
-                originalConsoleLog.call(console,
-                    `%c ${type} [${name ?? 'unknown'}]`,
-                    `background: ${color}; color: ${messageFontColor}`,
-                    item,
-                );
+            if (hasId && isRestricted?.(item.id as string | number)) {
+                return;
             }
-        }
-    };
 
-    const request = (item: IMessage, meta: IMessageMeta = {}) => {
-        const {prefix, prefixColor, messageName} = meta;
+            const name = messageName ?? (hasId ? item.id : 'unknown');
 
-        if (!item.id || !isRestricted || !isRestricted(item.id)) {
-            server({
-                prefix,
-                prefixColor,
-                type: 'Req',
-                name: messageName ?? item.id,
-                color: '#daf9d0',
-                item,
-            });
-        }
-    };
+            const {timestamp, format} = getDate();
 
-    const response = (item: IMessage, meta: IMessageMeta = {}) => {
-        const {prefix, prefixColor, messageName} = meta;
+            const label = prefix ? `${prefix} ${type}` : type;
 
-        if (!item.id || !isRestricted || !isRestricted(item.id)) {
-            server({
-                prefix,
-                prefixColor,
-                type: 'Res',
-                name: messageName ?? item.id,
-                color: '#cceaf4',
-                item,
-            });
-        }
-    };
+            pushLog({timestamp, message: `[${format}]: ${label} (${name}): ${stringify(item)}`});
 
-    const event = (item: IMessage, meta: IMessageMeta = {}) => {
-        const {prefix, prefixColor, messageName} = meta;
-
-        if (!item.id || !isRestricted || !isRestricted(item.id)) {
-            server({
-                prefix,
-                prefixColor,
-                type: 'Evt',
-                name: messageName ?? item.id,
-                color: '#d5d3f3',
-                item,
-            });
-        }
+            if (enabled) {
+                if (prefix) {
+                    originalConsoleLog.call(console,
+                        `%c ${prefix} %c ${type} [${name}]`,
+                        `background: ${prefixColor}`,
+                        `background: ${color}; color: ${messageFontColor}`,
+                        item,
+                    );
+                } else {
+                    originalConsoleLog.call(console,
+                        `%c ${type} [${name}]`,
+                        `background: ${color}; color: ${messageFontColor}`,
+                        item,
+                    );
+                }
+            }
+        };
     };
 
     return {
@@ -249,8 +158,8 @@ export const createLogger = <Message extends IMessage>(
         info,
         error,
         warn,
-        request,
-        response,
-        event,
+        request: server('Req', '#daf9d0'),
+        response: server('Res', '#cceaf4'),
+        event: server('Evt', '#d5d3f3'),
     };
 };
