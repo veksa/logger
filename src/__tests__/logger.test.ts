@@ -340,3 +340,47 @@ describe('createLogger never throws into the caller', () => {
         expect(printed).toContain('<Unserializable>');
     });
 });
+
+describe('createLogger memory bounds', () => {
+    it('should keep at most 5000 logs by default', () => {
+        const logger = createLogger(false);
+
+        for (let i = 0; i < 5100; i++) {
+            logger.info(`line ${i}`);
+        }
+
+        const stored = logger.getLogs();
+        expect(stored).toHaveLength(5000);
+        expect(stored[0].message).toContain('line 100');
+    });
+
+    it('should cut a stored message longer than 20000 characters by default, saying how much went', () => {
+        const logger = createLogger(false);
+        const payload = {data: 'x'.repeat(50_000)};
+
+        logger.response({id: 'BIG', payload, clientMsgId: 'c-1'});
+
+        const [log] = logger.getLogs();
+        expect(log.message.length).toBeLessThan(20_100);
+        expect(log.message).toMatch(/… \[\d+ more characters]$/);
+    });
+
+    it('should keep a message as it is up to the limit and honour a custom one', () => {
+        const small = createLogger(false, {maxMessageLength: 40});
+        small.info('y'.repeat(100));
+        expect(small.getLogs()[0].message).toMatch(/^.{40}… \[\d+ more characters]$/);
+
+        const unlimited = createLogger(false, {maxMessageLength: Infinity, maxItems: Infinity});
+        unlimited.info('z'.repeat(30_000));
+        expect(unlimited.getLogs()[0].message).toContain('z'.repeat(30_000));
+    });
+
+    it('should never cut a surrogate pair in half', () => {
+        const logger = createLogger(false, {maxMessageLength: 30});
+        logger.info('😀'.repeat(40));
+
+        const [log] = logger.getLogs();
+        const head = log.message.split('… [')[0];
+        expect(head).not.toMatch(/[\uD800-\uDBFF]$/);
+    });
+});

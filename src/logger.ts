@@ -32,8 +32,13 @@ export interface ILoggerOptions {
     redact?: ILoggerRedactOptions;
     /** How long a log is kept, in ms; 10 minutes by default, `Infinity` keeps logs until `maxItems` pushes them out. */
     expirationTime?: number;
-    /** The most logs kept; the oldest go first. No limit by default. */
+    /** The most logs kept; the oldest go first. 5000 by default, `Infinity` for no limit. */
     maxItems?: number;
+    /**
+     * The longest stored message, in characters; the rest is cut and its length noted. 20000 by default,
+     * `Infinity` keeps messages whole. Console output is never cut.
+     */
+    maxMessageLength?: number;
     /** Store what the app passes to `console.log`, `console.warn` and `console.error`; `true` by default. */
     captureConsole?: boolean;
 }
@@ -53,6 +58,26 @@ export interface ILogger<Message extends IMessage> {
 }
 
 const defaultExpirationTime = 10 * 60 * 1000; // 10 minutes
+
+// Bounds the buffer: without them a chatty app or one huge payload holds memory for the whole expiration time.
+const defaultMaxItems = 5000;
+const defaultMaxMessageLength = 20_000;
+
+const truncate = (message: string, maxLength: number): string => {
+    if (message.length <= maxLength) {
+        return message;
+    }
+
+    let end = Math.max(Math.floor(maxLength), 0);
+
+    // never leave half of a surrogate pair at the cut
+    const last = message.charCodeAt(end - 1);
+    if (end > 0 && last >= 0xd800 && last <= 0xdbff) {
+        end--;
+    }
+
+    return `${message.slice(0, end)}… [${message.length - end} more characters]`;
+};
 
 const messageFontColor = 'rgb(50, 57, 65)';
 
@@ -79,7 +104,8 @@ export const createLogger = <Message extends IMessage>(
         isRestricted,
         redact,
         expirationTime = defaultExpirationTime,
-        maxItems = Infinity,
+        maxItems = defaultMaxItems,
+        maxMessageLength = defaultMaxMessageLength,
         captureConsole = true,
     }: ILoggerOptions = typeof options === 'function'
         ? {isRestricted: options}
@@ -120,7 +146,7 @@ export const createLogger = <Message extends IMessage>(
     };
 
     const pushLog = (log: ILogItem) => {
-        logs.push(log);
+        logs.push({timestamp: log.timestamp, message: truncate(log.message, maxMessageLength)});
 
         prune();
     };

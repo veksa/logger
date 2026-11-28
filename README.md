@@ -23,7 +23,7 @@ yarn add @veksa/logger
 ## Features
 
 - Enhanced console logging with millisecond timestamps
-- Memory storage of logs with automatic expiration (10 minutes by default) and an optional size limit
+- Memory storage of logs with automatic expiration (10 minutes by default) and size limits (5000 logs, 20000 characters a message by default)
 - Special formatting for requests, responses, and events
 - Easy enabling/disabling of logging
 - Support for restricting specific message IDs
@@ -87,7 +87,9 @@ Creates a new logger instance.
   - `isRestricted(id)`: messages whose id it returns `true` for are neither stored nor printed
   - `redact`: fields to hide, see [Redacting sensitive fields](#redacting-sensitive-fields)
   - `expirationTime` (ms): how long a log is kept; 10 minutes by default, `Infinity` to keep it until `maxItems`
-  - `maxItems`: the most logs kept, the oldest go first; no limit by default
+  - `maxItems`: the most logs kept, the oldest go first; 5000 by default, `Infinity` for no limit
+  - `maxMessageLength`: the longest stored message in characters, the rest cut with its length noted; 20000 by
+    default, `Infinity` keeps messages whole; console output is never cut
   - `captureConsole`: also store what the app passes to `console.log`, `console.warn` and `console.error`;
     `true` by default
 
@@ -178,6 +180,7 @@ interface ILoggerOptions {
     redact?: IRedactOptions & { console?: boolean };
     expirationTime?: number;
     maxItems?: number;
+    maxMessageLength?: number;
     captureConsole?: boolean;
 }
 
