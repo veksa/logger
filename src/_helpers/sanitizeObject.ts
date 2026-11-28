@@ -124,15 +124,27 @@ const readProperty = (target: object, key: string): unknown => {
 
 const unchanged = Symbol('unchanged');
 
+const UNSERIALIZABLE = '<Unserializable>';
+
 /** Builds a sanitizer once for repeated use with the same options. */
 export const createSanitizer = (options: ISanitizeOptions = {}): (value: unknown) => unknown => {
     const redactor = compileRedactor(options.redact);
 
-    if (options.preserve) {
-        return redactor ? createPreserver(redactor) : value => value;
+    if (options.preserve && !redactor) {
+        return value => value;
     }
 
-    return createSerializer(redactor);
+    const sanitize = options.preserve && redactor ? createPreserver(redactor) : createSerializer(redactor);
+
+    // A value the walk cannot finish (nesting deeper than the stack, a proxy whose traps throw) becomes a
+    // placeholder: logging never throws into the caller, and the unredacted original is never let through.
+    return value => {
+        try {
+            return sanitize(value);
+        } catch {
+            return UNSERIALIZABLE;
+        }
+    };
 };
 
 const censorValue = (redactor: IRedactor, value: unknown, key: string, path: string[]): unknown => {
@@ -225,7 +237,7 @@ const createSerializer = (redactor?: IRedactor) => {
                     try {
                         return walk(toJSON.call(target), path);
                     } catch {
-                        return '<Unserializable>';
+                        return UNSERIALIZABLE;
                     }
                 }
 
@@ -389,6 +401,6 @@ export const stringify = (value: unknown, sanitize: (value: unknown) => unknown 
     try {
         return JSON.stringify(sanitize(value)) ?? String(value);
     } catch {
-        return '<Unserializable>';
+        return UNSERIALIZABLE;
     }
 };

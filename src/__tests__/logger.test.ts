@@ -305,3 +305,38 @@ describe('createLogger timestamps', () => {
     });
 });
 
+
+describe('createLogger never throws into the caller', () => {
+    const deep = () => {
+        const root: Record<string, unknown> = {};
+        let node = root;
+        for (let i = 0; i < 100_000; i++) {
+            const next: Record<string, unknown> = {};
+            node.next = next;
+            node = next;
+        }
+        return root;
+    };
+
+    const hostile = () => new Proxy({}, {
+        ownKeys: () => {
+            throw new Error('ownKeys trap');
+        },
+    });
+
+    it.each([
+        ['a nesting deeper than the stack', deep],
+        ['a proxy whose key listing throws', hostile],
+    ])('should log %s with console redaction on', (_, make) => {
+        const logger = createLogger(true, {redact: {keys: ['password']}});
+        const item = {id: 'LOGIN', payload: make(), clientMsgId: 'c-1'};
+
+        expect(() => logger.request(item)).not.toThrow();
+        expect(() => logger.error('failed', make())).not.toThrow();
+        expect(() => console.log('raw', make())).not.toThrow();
+
+        expect(logger.getLogs()).toHaveLength(3);
+        const printed = JSON.stringify([mocks.log.mock.calls, mocks.error.mock.calls]);
+        expect(printed).toContain('<Unserializable>');
+    });
+});

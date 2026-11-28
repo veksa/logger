@@ -305,3 +305,18 @@ describe('sanitizeObject preserve', () => {
     });
 });
 
+
+describe('sanitizeObject never throws', () => {
+    it('should turn a nesting deeper than the stack into a placeholder', () => {
+        const root: Record<string, unknown> = {};
+        let node = root;
+        for (let i = 0; i < 100_000; i++) {
+            const next: Record<string, unknown> = {};
+            node.next = next;
+            node = next;
+        }
+
+        expect(sanitizeObject(root)).toBe('<Unserializable>');
+        expect(sanitizeObject(root, {redact: {keys: ['password']}, preserve: true})).toBe('<Unserializable>');
+    });
+});
