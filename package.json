@@ -1,6 +1,6 @@
 {
   "name": "@veksa/logger",
-  "version": "1.1.2",
+  "version": "1.2.0",
   "description": "Lightweight, configurable logging library for JavaScript applications",
   "homepage": "https://github.com/veksa/logger",
   "packageManager": "yarn@4.13.0",
